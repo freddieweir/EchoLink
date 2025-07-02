@@ -7,16 +7,25 @@ This module handles text-to-speech conversion using ElevenLabs API
 import io
 import tempfile
 from pathlib import Path
-from typing import Optional, Union
-from elevenlabs import generate, save, Voice, VoiceSettings
+from typing import Optional, Union, List
+from elevenlabs.client import ElevenLabs
+from elevenlabs import Voice, VoiceSettings
 from pydub import AudioSegment
-from pydub.playback import play
+from pydub.playback import play as pydub_play
 import logging
 
 from ..config.settings import settings
 
 
 logger = logging.getLogger(__name__)
+
+
+class VoiceInfo:
+    """Simple voice information container"""
+    def __init__(self, voice_id: str, name: str, category: str = ""):
+        self.voice_id = voice_id
+        self.name = name
+        self.category = category
 
 
 class VoiceSynthesizer:
@@ -34,6 +43,9 @@ class VoiceSynthesizer:
         
         if not self.api_key:
             raise ValueError("ElevenLabs API key is required")
+        
+        # Initialize ElevenLabs client
+        self.client = ElevenLabs(api_key=self.api_key)
         
         # Configure voice settings
         self.voice_settings = VoiceSettings(
@@ -62,17 +74,16 @@ class VoiceSynthesizer:
             
             logger.info(f"Synthesizing text: {text[:50]}...")
             
-            # Generate audio using ElevenLabs
-            audio = generate(
+            # Generate audio using ElevenLabs client
+            audio = self.client.text_to_speech.convert(
                 text=text,
-                voice=Voice(
-                    voice_id=use_voice_id,
-                    settings=self.voice_settings
-                ),
-                api_key=self.api_key
+                voice_id=use_voice_id,
+                voice_settings=self.voice_settings
             )
             
-            return audio
+            # Convert audio generator to bytes
+            audio_bytes = b"".join(audio)
+            return audio_bytes
             
         except Exception as e:
             logger.error(f"Failed to synthesize text: {e}")
@@ -101,7 +112,7 @@ class VoiceSynthesizer:
                     volume_db = 20 * (settings.voice_volume - 1)  # Convert to dB
                     audio_segment = audio_segment + volume_db
                 
-                play(audio_segment)
+                pydub_play(audio_segment)
                 
                 # Clean up
                 Path(temp_file.name).unlink()
@@ -132,17 +143,26 @@ class VoiceSynthesizer:
             logger.error(f"Failed to save audio: {e}")
             raise
     
-    def get_available_voices(self) -> list:
+    def get_available_voices(self) -> List[VoiceInfo]:
         """Get list of available voices from ElevenLabs
         
         Returns:
             List of available voice information
         """
         try:
-            from elevenlabs import voices
+            voice_list = self.client.voices.get_all()
             
-            voice_list = voices(api_key=self.api_key)
-            return voice_list
+            # Convert to our VoiceInfo format
+            voice_info_list = []
+            for voice in voice_list.voices:
+                voice_info = VoiceInfo(
+                    voice_id=voice.voice_id,
+                    name=voice.name,
+                    category=getattr(voice, 'category', 'unknown')
+                )
+                voice_info_list.append(voice_info)
+            
+            return voice_info_list
             
         except Exception as e:
             logger.error(f"Failed to get available voices: {e}")

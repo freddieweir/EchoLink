@@ -71,6 +71,20 @@ class EchoLinkSettings:
     def openai_model(self) -> str:
         return os.getenv('OPENAI_MODEL', 'gpt-3.5-turbo')
     
+    # Ollama Configuration
+    @property
+    def ollama_base_url(self) -> str:
+        return os.getenv('OLLAMA_BASE_URL', 'http://localhost:11434')
+    
+    @property
+    def ollama_model(self) -> str:
+        return os.getenv('OLLAMA_MODEL', 'llama2')
+    
+    @property
+    def summarization_provider(self) -> str:
+        """Which summarization provider to use: 'ollama', 'openai', or 'simple'"""
+        return os.getenv('SUMMARIZATION_PROVIDER', 'ollama').lower()
+    
     # Voice Settings
     @property
     def voice_speed(self) -> float:

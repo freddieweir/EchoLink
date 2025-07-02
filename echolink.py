@@ -104,12 +104,12 @@ class EchoLinkApp:
                 self.logger.warning("No text to synthesize after processing")
                 return
             
-                         # Synthesize and play voice
-             if self.voice_synthesizer is not None:
-                 self.voice_synthesizer.play_text(processed_text)
-                 self.logger.info("Voice synthesis completed")
-             else:
-                 self.logger.warning("Voice synthesizer not available")
+            # Synthesize and play voice
+            if self.voice_synthesizer is not None:
+                self.voice_synthesizer.play_text(processed_text)
+                self.logger.info("Voice synthesis completed")
+            else:
+                self.logger.warning("Voice synthesizer not available")
                 
         except Exception as e:
             self.logger.error(f"Error processing detected text: {e}")
@@ -224,7 +224,16 @@ class EchoLinkApp:
                 return False
                 
             elif action == "voice_settings":
-                self.ui.show_message("Voice settings not yet implemented", "Info", "info")
+                self.ui.change_menu("voice_settings")
+                
+            elif action == "select_voice":
+                self.select_voice_interactive()
+                
+            elif action == "volume_settings":
+                self.adjust_volume_interactive()
+                
+            elif action == "speed_settings":
+                self.adjust_speed_interactive()
                 
             elif action == "monitor_settings":
                 self.ui.show_message("Monitor settings not yet implemented", "Info", "info")
@@ -272,6 +281,99 @@ class EchoLinkApp:
         except Exception as e:
             self.logger.error(f"Error showing status: {e}")
             self.ui.show_message(f"Error getting status: {e}", "Error", "error")
+    
+    def select_voice_interactive(self):
+        """Allow user to select a voice interactively"""
+        try:
+            if not self.voice_synthesizer:
+                if not self.initialize_voice_synthesizer():
+                    self.ui.show_message(
+                        "Voice synthesizer not available. Check your API keys.",
+                        "Error",
+                        "error"
+                    )
+                    return
+            
+            self.ui.show_progress("Fetching available voices", 3.0)
+            
+            # Get available voices
+            available_voices = self.voice_synthesizer.get_available_voices()
+            
+            if not available_voices:
+                self.ui.show_message(
+                    "No voices available or failed to fetch voices from ElevenLabs.",
+                    "Warning",
+                    "warning"
+                )
+                return
+            
+            # Create voice selection display
+            voice_list = []
+            for i, voice in enumerate(available_voices):
+                current_marker = " (Current)" if voice.voice_id == settings.elevenlabs_voice_id else ""
+                voice_list.append(f"{i+1}. {voice.name} - {voice.voice_id}{current_marker}")
+            
+            voice_text = "\n".join(voice_list[:10])  # Show first 10 voices
+            if len(available_voices) > 10:
+                voice_text += f"\n... and {len(available_voices) - 10} more voices"
+            
+            voice_text += f"\n\nCurrent Voice ID: {settings.elevenlabs_voice_id}"
+            voice_text += "\n\nTo change voice, update ELEVENLABS_VOICE_ID in your .env file"
+            
+            self.ui.show_message(voice_text, "Available Voices", "info")
+            
+        except Exception as e:
+            self.logger.error(f"Error selecting voice: {e}")
+            self.ui.show_message(f"Error fetching voices: {e}", "Error", "error")
+    
+    def adjust_volume_interactive(self):
+        """Allow user to adjust volume settings"""
+        try:
+            current_volume = settings.voice_volume
+            volume_info = [
+                f"Current Volume: {current_volume * 100:.0f}%",
+                "",
+                "Volume Scale:",
+                "🔊 1.0 = 100% (Maximum)",
+                "🔊 0.8 = 80% (Recommended)",
+                "🔊 0.5 = 50% (Medium)",
+                "🔊 0.3 = 30% (Quiet)",
+                "",
+                "To change volume, update VOICE_VOLUME in your .env file",
+                "Example: VOICE_VOLUME=0.8"
+            ]
+            
+            volume_text = "\n".join(volume_info)
+            self.ui.show_message(volume_text, "Volume Settings", "info")
+            
+        except Exception as e:
+            self.logger.error(f"Error showing volume settings: {e}")
+            self.ui.show_message(f"Error: {e}", "Error", "error")
+    
+    def adjust_speed_interactive(self):
+        """Allow user to adjust speech speed settings"""
+        try:
+            current_speed = settings.voice_speed
+            speed_info = [
+                f"Current Speed: {current_speed}x",
+                "",
+                "Speed Options:",
+                "⚡ 2.0x = Very Fast",
+                "⚡ 1.5x = Fast", 
+                "⚡ 1.0x = Normal (Recommended)",
+                "⚡ 0.8x = Slower",
+                "⚡ 0.5x = Very Slow",
+                "",
+                "To change speed, update VOICE_SPEED in your .env file",
+                "Example: VOICE_SPEED=1.2"
+            ]
+            
+            speed_text = "\n".join(speed_info)
+            self.ui.show_message(speed_text, "Speed Settings", "info")
+            
+        except Exception as e:
+            self.logger.error(f"Error showing speed settings: {e}")
+            self.ui.show_message(f"Error: {e}", "Error", "error")
     
     def run(self):
         """Run the main application"""

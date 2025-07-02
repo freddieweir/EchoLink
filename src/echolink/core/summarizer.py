@@ -9,6 +9,8 @@ import re
 import logging
 from typing import Optional
 import openai
+import requests
+import json
 
 from ..config.settings import settings
 
@@ -26,13 +28,16 @@ class TextSummarizer:
             api_key: OpenAI API key (defaults to settings)
         """
         self.api_key = api_key or settings.openai_api_key
-        self.client = None
+        self.openai_client = None
         
-        if self.api_key:
+        if self.api_key and settings.summarization_provider == 'openai':
             try:
-                self.client = openai.OpenAI(api_key=self.api_key)
+                self.openai_client = openai.OpenAI(api_key=self.api_key)
             except Exception as e:
                 logger.warning(f"Failed to initialize OpenAI client: {e}")
+        
+        # Log which summarization provider is being used
+        logger.info(f"Text summarizer initialized with provider: {settings.summarization_provider}")
     
     def clean_text(self, text: str) -> str:
         """Clean and normalize text for better processing
@@ -131,7 +136,7 @@ class TextSummarizer:
         Returns:
             AI-generated summary or None if failed
         """
-        if not self.client:
+        if not self.openai_client:
             logger.debug("OpenAI client not available for AI summarization")
             return None
         
@@ -143,7 +148,7 @@ Keep it under {settings.max_summary_length} characters and make it sound natural
 
 Summary:"""
 
-            response = self.client.chat.completions.create(
+            response = self.openai_client.chat.completions.create(
                 model=settings.openai_model,
                 messages=[
                     {"role": "system", "content": "You are a helpful assistant that creates concise, conversational summaries suitable for text-to-speech."},
@@ -166,6 +171,59 @@ Summary:"""
             logger.error(f"AI summarization failed: {e}")
             return None
     
+    def ollama_summarize(self, text: str) -> Optional[str]:
+        """Use Ollama to summarize text intelligently
+        
+        Args:
+            text: Text to summarize
+            
+        Returns:
+            Ollama-generated summary or None if failed
+        """
+        try:
+            prompt = f"""Please summarize the following text in a conversational way that's suitable for text-to-speech. 
+Keep it under {settings.max_summary_length} characters and make it sound natural when spoken aloud:
+
+{text}
+
+Summary:"""
+
+            # Prepare the request to Ollama
+            payload = {
+                "model": settings.ollama_model,
+                "prompt": prompt,
+                "stream": False,
+                "options": {
+                    "temperature": 0.7,
+                    "num_predict": 100  # Limit response length
+                }
+            }
+            
+            # Make request to Ollama API
+            response = requests.post(
+                f"{settings.ollama_base_url}/api/generate",
+                json=payload,
+                timeout=30
+            )
+            response.raise_for_status()
+            
+            result = response.json()
+            summary = result.get("response", "").strip()
+            
+            # Ensure summary isn't too long
+            if len(summary) > settings.max_summary_length:
+                summary = summary[:settings.max_summary_length] + "..."
+            
+            logger.info(f"Ollama summarization successful: {len(text)} -> {len(summary)} chars")
+            return summary
+            
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Ollama API request failed: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Ollama summarization failed: {e}")
+            return None
+    
     def summarize_text(self, text: str) -> str:
         """Summarize text using the best available method
         
@@ -185,15 +243,24 @@ Summary:"""
         if not self.should_summarize(cleaned_text):
             return cleaned_text
         
-        logger.info(f"Summarizing text ({len(cleaned_text)} chars)")
+        logger.info(f"Summarizing text ({len(cleaned_text)} chars) using {settings.summarization_provider}")
         
-        # Try AI summarization first
-        ai_summary = self.ai_summarize(cleaned_text)
-        if ai_summary:
-            return ai_summary
+        # Choose summarization method based on provider setting
+        if settings.summarization_provider == 'ollama':
+            ollama_summary = self.ollama_summarize(cleaned_text)
+            if ollama_summary:
+                return ollama_summary
+            logger.info("Ollama summarization failed, falling back to simple summarization")
         
-        # Fall back to simple summarization
-        logger.info("Falling back to simple summarization")
+        elif settings.summarization_provider == 'openai':
+            # Try OpenAI summarization
+            openai_summary = self.ai_summarize(cleaned_text)
+            if openai_summary:
+                return openai_summary
+            logger.info("OpenAI summarization failed, falling back to simple summarization")
+        
+        # Fall back to simple summarization for 'simple' provider or when AI fails
+        logger.info("Using simple rule-based summarization")
         return self.simple_summarize(cleaned_text)
     
     def process_for_voice(self, text: str) -> str:
@@ -251,7 +318,7 @@ Summary:"""
             "summary_length": len(summary),
             "compression_ratio": len(summary) / len(original) if original else 0,
             "reduction_percentage": (1 - len(summary) / len(original)) * 100 if original else 0,
-            "ai_available": self.client is not None,
+            "ai_available": self.openai_client is not None,
             "settings": {
                 "max_summary_length": settings.max_summary_length,
                 "min_text_length": settings.min_text_length,

@@ -38,7 +38,7 @@ cp config.example.env .env
 
 ```bash
 # Test basic functionality
-python test_basic.py
+python tests/test_basic.py
 
 # Launch EchoLink
 python echolink.py
@@ -113,8 +113,14 @@ EchoLink/
 │   │   └── synthesizer.py   # ElevenLabs integration
 │   └── ui/                  # User interface
 │       └── cli.py           # Rich CLI with navigation
-├── requirements-core.txt    # Core dependencies
-├── test_basic.py           # Basic functionality tests
+├── tests/                   # Test files and diagnostics
+│   ├── test_basic.py       # Basic functionality tests
+│   ├── test_elevenlabs.py  # ElevenLabs API tests
+│   ├── test_openai.py      # OpenAI integration tests
+│   ├── test_ollama.py      # Ollama integration tests
+│   └── check_config.py     # Configuration diagnostic
+├── requirements.txt         # Core dependencies
+├── SECURITY.md             # Security guidelines
 └── .env                    # Your configuration file
 ```
 
@@ -170,7 +176,11 @@ pip install -r requirements-core.txt
 
 ### Running Tests
 ```bash
-python test_basic.py  # Basic functionality tests
+python tests/test_basic.py      # Basic functionality tests
+python tests/test_elevenlabs.py # Test ElevenLabs API connection
+python tests/test_openai.py     # Test OpenAI integration
+python tests/test_ollama.py     # Test Ollama integration
+python tests/check_config.py    # Check configuration
 ```
 
 ### Adding Features
@@ -194,9 +204,10 @@ This project is developed for personal use with Cursor AI. Ensure compliance wit
 ## Support
 
 For issues or questions:
-1. Run `python test_basic.py` to verify setup
-2. Check logs in `echolink.log` for debugging
+1. Run `python tests/test_basic.py` to verify setup
+2. Check logs in generated `.log` files for debugging
 3. Verify API key configuration in `.env`
+4. Review `SECURITY.md` for security guidelines
 
 ---
 

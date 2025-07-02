@@ -2,11 +2,13 @@
 EchoLink CLI User Interface
 
 This module provides an interactive command-line interface with rich colors,
-arrow key navigation, and ADHD-friendly design elements.
+navigation, and ADHD-friendly design elements.
 """
 
 import sys
 import time
+import threading
+import select
 from typing import List, Callable, Optional, Dict, Any
 from rich.console import Console
 from rich.panel import Panel
@@ -15,7 +17,7 @@ from rich.layout import Layout
 from rich.live import Live
 from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn
-import keyboard
+from rich.prompt import Prompt
 import logging
 
 from ..config.settings import settings
@@ -30,13 +32,13 @@ class CLIInterface:
     def __init__(self):
         """Initialize the CLI interface"""
         self.console = Console(
-            color_system="truecolor" if settings.cli_colors_enabled else "standard",
-            theme=self._get_theme()
+            color_system="truecolor" if settings.cli_colors_enabled else "standard"
         )
         self.current_menu = "main"
         self.menu_stack: List[str] = []
         self.selected_index = 0
         self.running = False
+        self.live_display = None
         
         # Menu definitions
         self.menus = {
@@ -60,6 +62,15 @@ class CLIInterface:
                     {"label": "🔑 API Keys", "action": "api_settings", "emoji": "🔑"},
                     {"label": "↩️ Back", "action": "back", "emoji": "↩️"}
                 ]
+            },
+            "voice_settings": {
+                "title": "🔊 Voice Settings",
+                "options": [
+                    {"label": "🎭 Select Voice", "action": "select_voice", "emoji": "🎭"},
+                    {"label": "🔊 Volume Control", "action": "volume_settings", "emoji": "🔊"},
+                    {"label": "⚡ Speed Control", "action": "speed_settings", "emoji": "⚡"},
+                    {"label": "↩️ Back", "action": "back", "emoji": "↩️"}
+                ]
             }
         }
         
@@ -70,12 +81,6 @@ class CLIInterface:
             "last_processed": None,
             "processed_count": 0
         }
-        
-    def _get_theme(self) -> str:
-        """Get the appropriate theme based on settings"""
-        if settings.cli_theme == "light":
-            return "bright"
-        return "dark"
     
     def _create_header(self) -> Panel:
         """Create the header panel"""
@@ -158,10 +163,9 @@ class CLIInterface:
         """Create the help panel"""
         help_text = Text()
         help_text.append("Navigation:\n", style="bold cyan")
-        help_text.append("↑/↓ or W/S: Navigate menu\n", style="white")
-        help_text.append("Enter or Space: Select option\n", style="white")
-        help_text.append("Esc or Q: Go back/Exit\n", style="white")
-        help_text.append("Tab: Cycle through panels\n", style="white")
+        help_text.append("Numbers (1-6): Select menu option\n", style="white")
+        help_text.append("Enter: Select current option\n", style="white")
+        help_text.append("B: Go back, Q: Quit\n", style="white")
         
         help_text.append("\nFeatures:\n", style="bold cyan")
         help_text.append("• Real-time clipboard monitoring\n", style="white")
@@ -183,7 +187,7 @@ class CLIInterface:
         layout.split_column(
             Layout(name="header", size=3),
             Layout(name="body"),
-            Layout(name="footer", size=3)
+            Layout(name="footer", size=4)
         )
         
         layout["body"].split_row(
@@ -195,8 +199,13 @@ class CLIInterface:
         layout["header"].update(self._create_header())
         layout["menu"].update(self._create_menu_panel(self.current_menu))
         layout["sidebar"].update(self._create_status_panel())
+        
+        # Create footer with input prompt
+        footer_text = "[dim]Enter option number (1-6), 'b' for back, 'q' to quit:[/dim]\n"
+        footer_text += f"[bold cyan]Choice: [/bold cyan]"
+        
         layout["footer"].update(Panel(
-            "[dim]Use ↑/↓ to navigate, Enter to select, Esc to go back[/dim]",
+            footer_text,
             border_style="dim"
         ))
         
@@ -256,7 +265,7 @@ class CLIInterface:
         )
         
         self.console.print(panel)
-        time.sleep(2)  # Display for 2 seconds
+        input("\nPress Enter to continue...")
     
     def show_progress(self, task_name: str, duration: float = 2.0):
         """Show a progress indicator
@@ -284,8 +293,7 @@ class CLIInterface:
         Returns:
             User input string
         """
-        self.console.print(f"\n[cyan]{prompt}[/cyan]")
-        return input("> ")
+        return Prompt.ask(f"[cyan]{prompt}[/cyan]")
     
     def confirm_action(self, message: str) -> bool:
         """Ask user to confirm an action
@@ -296,10 +304,12 @@ class CLIInterface:
         Returns:
             True if confirmed, False otherwise
         """
-        self.console.print(f"\n[yellow]❓ {message}[/yellow]")
-        self.console.print("[dim](y/n)[/dim]")
-        response = input("> ").lower().strip()
-        return response in ('y', 'yes', '1', 'true')
+        response = Prompt.ask(
+            f"[yellow]❓ {message}[/yellow]",
+            choices=["y", "n", "yes", "no"],
+            default="n"
+        )
+        return response.lower() in ['y', 'yes']
     
     def update_status(self, **kwargs):
         """Update status information
@@ -313,6 +323,43 @@ class CLIInterface:
         """Clear the console screen"""
         self.console.clear()
     
+    def display_menu_and_get_choice(self) -> str:
+        """Display menu and get user choice"""
+        self.console.clear()
+        
+        # Show the layout
+        layout = self._create_layout()
+        self.console.print(layout)
+        
+        # Get user input
+        current_options = self.menus.get(self.current_menu, self.menus["main"])["options"]
+        max_option = len(current_options)
+        
+        while True:
+            try:
+                choice = input().strip().lower()
+                
+                if choice == 'q':
+                    return 'exit'
+                elif choice == 'b':
+                    return 'back'
+                elif choice.isdigit():
+                    option_num = int(choice)
+                    if 1 <= option_num <= max_option:
+                        self.selected_index = option_num - 1
+                        action = self.select_option()
+                        return action if action else 'exit'
+                    else:
+                        self.console.print(f"[red]Please enter a number between 1 and {max_option}[/red]")
+                elif choice == '':
+                    # Enter pressed, select current option
+                    action = self.select_option()
+                    return action if action else 'exit'
+                else:
+                    self.console.print(f"[red]Invalid choice. Enter 1-{max_option}, 'b' for back, or 'q' to quit.[/red]")
+            except (ValueError, KeyboardInterrupt):
+                return 'exit'
+    
     def run_interface(self, action_handler: Callable[[str], bool]):
         """Run the main interface loop
         
@@ -322,49 +369,30 @@ class CLIInterface:
         self.running = True
         
         try:
-            with Live(self._create_layout(), refresh_per_second=4, screen=True) as live:
+            self.console.print("[bold green]🎙️ Welcome to EchoLink![/bold green]")
+            self.console.print("[dim]Configure your API keys in .env file for full functionality.[/dim]\n")
+            
+            while self.running:
+                # Display menu and get choice
+                action = self.display_menu_and_get_choice()
                 
-                def on_key_press(event):
-                    if not self.running:
-                        return
-                    
-                    key = event.name
-                    
-                    if key in ('up', 'w'):
-                        self.navigate_up()
-                    elif key in ('down', 's'):
-                        self.navigate_down()
-                    elif key in ('enter', 'space'):
-                        action = self.select_option()
-                        if action:
-                            # Handle action outside of Live context
-                            should_continue = action_handler(action)
-                            if not should_continue:
-                                self.running = False
-                                return
-                    elif key in ('esc', 'q'):
-                        if self.menu_stack:
-                            self.change_menu("back")
-                        else:
-                            self.running = False
-                            return
-                    
-                    # Update layout
-                    live.update(self._create_layout())
-                
-                # Set up keyboard handler
-                keyboard.on_press(on_key_press)
-                
-                # Initial render
-                live.update(self._create_layout())
-                
-                # Keep running until stopped
-                while self.running:
-                    time.sleep(0.1)
-                    live.update(self._create_layout())
+                if action == "exit":
+                    break
+                elif action == "back":
+                    if self.menu_stack:
+                        self.change_menu("back")
+                    else:
+                        # Already at main menu, ask to exit
+                        if self.confirm_action("Exit EchoLink?"):
+                            break
+                elif action:
+                    # Handle the action
+                    should_continue = action_handler(action)
+                    if not should_continue:
+                        break
                 
         except KeyboardInterrupt:
             self.running = False
         finally:
-            keyboard.unhook_all()
+            self.running = False
             self.console.print("\n[dim]Goodbye! 👋[/dim]") 
