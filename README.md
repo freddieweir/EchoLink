@@ -13,6 +13,8 @@ Transform Cursor's AI responses into voice summaries with EchoLink! This tool li
 
 ## Quick Start
 
+🚀 **New to EchoLink?** Start with our comprehensive [Setup Guide](Docs/SETUP.md)
+
 ### 1. Installation
 
 ```bash
@@ -20,7 +22,7 @@ Transform Cursor's AI responses into voice summaries with EchoLink! This tool li
 cd EchoLink
 python -m venv ~/venv/echolink
 source ~/venv/echolink/bin/activate  # On macOS/Linux
-pip install -r requirements-core.txt
+pip install -r requirements.txt
 ```
 
 ### 2. Configuration
@@ -43,6 +45,8 @@ python tests/test_basic.py
 # Launch EchoLink
 python echolink.py
 ```
+
+📖 **Need help?** Check [Troubleshooting Guide](Docs/TROUBLESHOOTING.md) for common issues.
 
 ## Usage
 
@@ -103,24 +107,20 @@ CLI_COLORS_ENABLED=true  # Enable colorful interface
 ```
 EchoLink/
 ├── echolink.py              # Main application entry point
-├── src/echolink/
+├── src/echolink/            # Source code modules
 │   ├── config/              # Configuration management
-│   │   └── settings.py      # Environment and settings loader
-│   ├── core/                # Core functionality
-│   │   ├── monitor.py       # Text monitoring and detection
-│   │   └── summarizer.py    # Text processing and summarization
-│   ├── voice/               # Voice synthesis
-│   │   └── synthesizer.py   # ElevenLabs integration
-│   └── ui/                  # User interface
-│       └── cli.py           # Rich CLI with navigation
+│   ├── core/                # Core functionality (monitoring, summarization)
+│   ├── voice/               # Voice synthesis (ElevenLabs integration)
+│   └── ui/                  # User interface (Rich CLI)
 ├── tests/                   # Test files and diagnostics
-│   ├── test_basic.py       # Basic functionality tests
-│   ├── test_elevenlabs.py  # ElevenLabs API tests
-│   ├── test_openai.py      # OpenAI integration tests
-│   ├── test_ollama.py      # Ollama integration tests
-│   └── check_config.py     # Configuration diagnostic
+├── Docs/                    # 📚 Comprehensive documentation
+│   ├── SETUP.md            # Installation and configuration guide
+│   ├── TROUBLESHOOTING.md  # Common issues and solutions
+│   ├── SECURITY.md         # Security guidelines and best practices
+│   ├── specs/              # Feature specifications and roadmap
+│   └── templates/          # Documentation templates
 ├── requirements.txt         # Core dependencies
-├── SECURITY.md             # Security guidelines
+├── config.example.env       # Configuration template
 └── .env                    # Your configuration file
 ```
 
@@ -191,7 +191,10 @@ The modular architecture makes it easy to extend:
 
 ## Future Enhancements
 
-- **Two-way Voice**: Speech-to-text for voice commands back to Cursor
+📋 **Detailed specifications available in [Docs/specs/](Docs/specs/)**
+
+- **[File Monitoring](Docs/specs/1-file-monitoring-system.md)**: Replace clipboard with automated file-based detection (8-12 hours)
+- **[Two-way Voice](Docs/specs/2-two-way-voice-communication.md)**: Speech-to-text for voice commands back to Cursor (12-17 hours)
 - **Multiple Voice Providers**: Support for more TTS services
 - **Advanced Filtering**: Smart content detection and filtering
 - **Custom Voice Training**: Personalized voice models
@@ -203,11 +206,17 @@ This project is developed for personal use with Cursor AI. Ensure compliance wit
 
 ## Support
 
-For issues or questions:
+### 📚 Documentation
+- **[Setup Guide](Docs/SETUP.md)** - Complete installation and configuration
+- **[Troubleshooting](Docs/TROUBLESHOOTING.md)** - Common issues and solutions  
+- **[Security Guide](Docs/SECURITY.md)** - Security guidelines and best practices
+- **[Documentation Index](Docs/README.md)** - Full documentation overview
+
+### 🔧 Diagnostics
 1. Run `python tests/test_basic.py` to verify setup
 2. Check logs in generated `.log` files for debugging
 3. Verify API key configuration in `.env`
-4. Review `SECURITY.md` for security guidelines
+4. Use `python tests/check_config.py` for configuration check
 
 ---
 
