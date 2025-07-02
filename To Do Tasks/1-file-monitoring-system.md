@@ -31,10 +31,10 @@ class FileMonitor:
 
 ### Phase 2: Cursor Integration Options
 
-#### Option A: Cursor Extension
-- Create VS Code/Cursor extension that automatically writes AI responses to a file
-- Extension triggers on AI completion, appends to `~/cursor_output.txt`
-- Include metadata: timestamp, request type, response length
+#### Option A: Cursor Extension (Recommended)
+- Create VS Code/Cursor extension that automatically writes AI responses to JSON file
+- Extension triggers on AI completion, appends to `~/cursor_output.json`
+- Rich metadata: timestamp, content type, word count, code blocks, language detection
 
 #### Option B: AppleScript/Automation
 - Monitor Cursor window for AI responses
@@ -48,45 +48,77 @@ class FileMonitor:
 
 ### Phase 3: Enhanced Processing
 ```python
-# Enhanced content detection
+# Enhanced content detection for JSON format
 class CursorContentProcessor:
     def parse_cursor_output(self, content: str) -> dict:
-        """Parse Cursor output format and extract meaningful content"""
-        # Expected format: 
-        # [TIMESTAMP] REQUEST: user question
-        # [TIMESTAMP] RESPONSE: AI response
+        """Parse JSON cursor output and extract meaningful content"""
+        try:
+            data = json.loads(content.strip())
+            return {
+                "content": data.get("content", ""),
+                "type": data.get("type", "unknown"),
+                "timestamp": data.get("timestamp", ""),
+                "metadata": data.get("metadata", {}),
+                "should_speak": self.should_speak_content(data)
+            }
+        except json.JSONDecodeError:
+            # Fallback to text parsing
+            return self.parse_text_format(content)
         
-    def filter_content_type(self, content: str) -> bool:
-        """Filter what types of content should be spoken"""
-        # Skip code-only responses, speak explanations
+    def should_speak_content(self, data: dict) -> bool:
+        """Determine if content should be spoken based on type and metadata"""
+        content_type = data.get("type", "")
+        metadata = data.get("metadata", {})
+        
+        # Skip code-only responses if setting is disabled
+        if content_type == "code" and not settings.speak_code_responses:
+            return False
+            
+        # Skip if mostly code blocks
+        if metadata.get("code_blocks", 0) > 3 and len(data.get("content", "")) < 200:
+            return False
+            
+        return True
 ```
 
 ## Technical Details
 
 ### File Formats
-```
-# ~/cursor_output.txt format:
-[2025-01-01 10:30:15] REQUEST: How do I implement recursion?
-[2025-01-01 10:30:18] RESPONSE: Recursion is a programming technique where...
 
-# Alternative JSON format:
+#### Primary Format: JSON (Recommended)
+```json
 {
   "timestamp": "2025-01-01T10:30:18Z",
-  "type": "response", 
-  "content": "Recursion is a programming technique...",
-  "request_id": "uuid-here"
+  "type": "response",
+  "content": "Recursion is a programming technique where a function calls itself...",
+  "request_id": "uuid-4a2f-b3c1-9d8e",
+  "metadata": {
+    "word_count": 85,
+    "code_blocks": 1,
+    "language": "python",
+    "cursor_session": "session-abc123"
+  }
 }
+```
+
+#### Alternative: Simple Text Format
+```
+# ~/cursor_output.txt format (fallback):
+[2025-01-01 10:30:15] REQUEST: How do I implement recursion?
+[2025-01-01 10:30:18] RESPONSE: Recursion is a programming technique where...
 ```
 
 ### Configuration Options
 ```env
 # New .env settings
 FILE_MONITOR_ENABLED=true
-CURSOR_OUTPUT_FILE=~/cursor_output.txt
+CURSOR_OUTPUT_FILE=~/cursor_output.json
+CURSOR_OUTPUT_FORMAT=json  # json or text
 WATCH_FILE_INTERVAL=0.5
 CONTENT_FILTER_ENABLED=true
 SPEAK_CODE_RESPONSES=false
 SPEAK_EXPLANATIONS=true
+PARSE_METADATA=true
 ```
 
 ### Watchdog Integration
@@ -123,18 +155,22 @@ class CursorFileHandler(FileSystemEventHandler):
 4. Update configuration options
 
 ### Step 3: Advanced Features (2-4 hours)
-1. JSON format support for structured data
-2. Multiple file monitoring
-3. Content type filtering (code vs explanations)
-4. Response metadata (timing, length, etc.)
+1. Enhanced JSON parsing with metadata extraction
+2. Content type classification (code, explanation, error, etc.)
+3. Multiple file monitoring (different AI tools)
+4. Smart filtering based on metadata (word count, code blocks, language)
 
 ## Testing Plan
 ```bash
-# Manual testing
+# Manual JSON testing
+echo '{"timestamp":"'$(date -Iseconds)'","type":"response","content":"This is a test response from Cursor","request_id":"test-123","metadata":{"word_count":8,"code_blocks":0}}' >> ~/cursor_output.json
+
+# Manual text testing (fallback)
 echo "[$(date)] RESPONSE: This is a test response from Cursor" >> ~/cursor_output.txt
 
 # Automated testing
 python tests/test_file_monitor.py
+python tests/test_json_parser.py
 
 # Integration testing
 # Use real Cursor session with AppleScript automation
