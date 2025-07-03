@@ -135,18 +135,28 @@ class EchoLinkApp:
             # Set up text callback
             self.text_monitor.add_text_callback(self.on_text_detected)
             
-            # Start monitoring
-            self.ui.show_progress("Starting clipboard monitoring")
-            self.text_monitor.start_clipboard_monitoring()
+            # Start monitoring (clipboard and/or file based on settings)
+            if settings.file_monitor_enabled:
+                self.ui.show_progress("Starting file monitoring")
+            else:
+                self.ui.show_progress("Starting clipboard monitoring")
+            self.text_monitor.start_monitoring()
             
             self.monitoring_active = True
             self.ui.update_status(monitoring=True)
             
-            self.ui.show_message(
-                "Voice monitoring started! Copy text to hear it spoken.",
-                "Success",
-                "success"
-            )
+            if settings.file_monitor_enabled:
+                self.ui.show_message(
+                    "Voice monitoring started! File monitoring is active - new content in watched files will be spoken.",
+                    "Success",
+                    "success"
+                )
+            else:
+                self.ui.show_message(
+                    "Voice monitoring started! Copy text to hear it spoken.",
+                    "Success",
+                    "success"
+                )
             
         except Exception as e:
             self.logger.error(f"Failed to start monitoring: {e}")

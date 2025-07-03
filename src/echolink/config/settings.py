@@ -102,6 +102,39 @@ class EchoLinkSettings:
     @property
     def clipboard_monitor_interval(self) -> float:
         return float(os.getenv('CLIPBOARD_MONITOR_INTERVAL', '1.0'))
+        # File Monitor Settings
+    @property
+    def file_monitor_enabled(self) -> bool:
+        return os.getenv('FILE_MONITOR_ENABLED', 'false').lower() == 'true'
+    
+    @property
+    def cursor_output_file(self) -> str:
+        return os.path.expanduser(os.getenv('CURSOR_OUTPUT_FILE', '~/cursor_output.json'))
+    
+    @property
+    def cursor_output_format(self) -> str:
+        return os.getenv('CURSOR_OUTPUT_FORMAT', 'json').lower()
+    
+    @property
+    def watch_file_interval(self) -> float:
+        return float(os.getenv('WATCH_FILE_INTERVAL', '0.5'))
+    
+    @property
+    def content_filter_enabled(self) -> bool:
+        return os.getenv('CONTENT_FILTER_ENABLED', 'true').lower() == 'true'
+    
+    @property
+    def speak_code_responses(self) -> bool:
+        return os.getenv('SPEAK_CODE_RESPONSES', 'false').lower() == 'true'
+    
+    @property
+    def speak_explanations(self) -> bool:
+        return os.getenv('SPEAK_EXPLANATIONS', 'true').lower() == 'true'
+    
+    @property
+    def parse_metadata(self) -> bool:
+        return os.getenv('PARSE_METADATA', 'true').lower() == 'true'
+    
     
     # UI Settings
     @property
