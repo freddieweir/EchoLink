@@ -13,6 +13,7 @@ import logging
 from datetime import datetime
 
 from ..config.settings import settings
+from .file_monitor import FileMonitor
 
 
 logger = logging.getLogger(__name__)
@@ -29,6 +30,10 @@ class TextMonitor:
         self.text_callbacks: Set[Callable[[str], None]] = set()
         self.processed_texts: Set[str] = set()  # To avoid processing duplicates
         
+        # File monitoring
+        self.file_monitor = FileMonitor()
+        self.file_monitoring_active = False
+        
     def add_text_callback(self, callback: Callable[[str], None]) -> None:
         """Add a callback function that will be called when new text is detected
         
@@ -36,6 +41,8 @@ class TextMonitor:
             callback: Function that takes text as parameter
         """
         self.text_callbacks.add(callback)
+        # Also add to file monitor
+        self.file_monitor.add_text_callback(callback)
         logger.debug(f"Added text callback: {callback.__name__}")
     
     def remove_text_callback(self, callback: Callable[[str], None]) -> None:
@@ -131,18 +138,48 @@ class TextMonitor:
         self.monitor_thread.start()
         logger.info("Clipboard monitoring started")
     
-    def stop_monitoring(self) -> None:
-        """Stop all monitoring activities"""
-        if not self.monitoring:
+    def start_file_monitoring(self) -> None:
+        """Start monitoring files for text changes"""
+        if not settings.file_monitor_enabled:
+            logger.info("File monitoring is disabled in settings")
             return
         
-        logger.info("Stopping text monitoring")
-        self.monitoring = False
+        if self.file_monitoring_active:
+            logger.warning("File monitoring is already running")
+            return
         
-        if self.monitor_thread and self.monitor_thread.is_alive():
-            self.monitor_thread.join(timeout=2)
-            if self.monitor_thread.is_alive():
-                logger.warning("Monitor thread did not stop gracefully")
+        try:
+            self.file_monitor.start_file_monitoring()
+            self.file_monitoring_active = True
+            logger.info("File monitoring started")
+        except Exception as e:
+            logger.error(f"Failed to start file monitoring: {e}")
+    
+    def start_monitoring(self) -> None:
+        """Start all enabled monitoring (clipboard and/or file)"""
+        if settings.clipboard_monitor_enabled:
+            self.start_clipboard_monitoring()
+        
+        if settings.file_monitor_enabled:
+            self.start_file_monitoring()
+    
+    def stop_monitoring(self) -> None:
+        """Stop all monitoring activities"""
+        # Stop clipboard monitoring
+        if self.monitoring:
+            logger.info("Stopping clipboard monitoring")
+            self.monitoring = False
+            
+            if self.monitor_thread and self.monitor_thread.is_alive():
+                self.monitor_thread.join(timeout=2)
+                if self.monitor_thread.is_alive():
+                    logger.warning("Monitor thread did not stop gracefully")
+        
+        # Stop file monitoring
+        if self.file_monitoring_active:
+            logger.info("Stopping file monitoring")
+            self.file_monitor.stop_monitoring()
+            self.file_monitoring_active = False
     
     def process_manual_text(self, text: str) -> None:
         """Manually process text (not from monitoring)
@@ -164,14 +201,19 @@ class TextMonitor:
         Returns:
             Dictionary with monitoring status information
         """
+        file_status = self.file_monitor.get_monitoring_status() if self.file_monitor else {}
+        
         return {
             "clipboard_monitoring": self.monitoring,
+            "file_monitoring": self.file_monitoring_active,
             "active_callbacks": len(self.text_callbacks),
             "processed_texts_count": len(self.processed_texts),
             "thread_alive": self.monitor_thread.is_alive() if self.monitor_thread else False,
+            "file_status": file_status,
             "settings": {
-                "enabled": settings.clipboard_monitor_enabled,
-                "interval": settings.clipboard_monitor_interval,
+                "clipboard_enabled": settings.clipboard_monitor_enabled,
+                "clipboard_interval": settings.clipboard_monitor_interval,
+                "file_enabled": settings.file_monitor_enabled,
                 "min_text_length": settings.min_text_length
             }
         } 
